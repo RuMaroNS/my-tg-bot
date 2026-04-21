@@ -4,12 +4,12 @@ import sqlite3
 import datetime
 import os
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message
 from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
-# --- Настройки ---
+# --- Конфиг ---
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0")) 
 
@@ -24,9 +24,7 @@ def init_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS users 
         (user_id INTEGER PRIMARY KEY, username TEXT, dick_size INTEGER DEFAULT 0, balance INTEGER DEFAULT 0, last_grow TEXT)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS promo_codes 
-        (code TEXT PRIMARY KEY, reward_size INTEGER, reward_balance INTEGER, uses INTEGER)''')
-    cursor.execute('''CREATE TABLE IF NOT EXISTS used_promos 
-        (user_id INTEGER, code TEXT, PRIMARY KEY (user_id, code))''')
+        (code TEXT PRIMARY KEY, reward_size INTEGER, reward_balance INTEGER)''')
     conn.commit()
     conn.close()
 
@@ -50,106 +48,71 @@ def update_user(user_id, **kwargs):
     conn.commit()
     conn.close()
 
-# --- Кнопки (Максимально простые) ---
-def main_private_kb():
-    # Только InlineKeyboardButton с callback_data!
-    buttons = [
-        [InlineKeyboardButton(text="🎁 Ввести промокод", callback_query_data="view_promo")],
-        [InlineKeyboardButton(text="🛒 Магазин", callback_query_data="view_shop")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+# --- Команды ---
 
-def group_kb():
-    buttons = [
-        [InlineKeyboardButton(text="📏 Вырастить!", callback_query_data="do_grow")],
-        [InlineKeyboardButton(text="🏆 ТОП", callback_query_data="view_top")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-# --- Хендлеры ---
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
-    user = get_user(message.from_user.id, message.from_user.username)
-    if message.chat.type in ['group', 'supergroup']:
-        await message.answer("💪 Кто тут самый длинный? Жми кнопку!", reply_markup=group_kb())
-    else:
-        await message.answer(
-            f"👋 Привет! Твой размер: <b>{user[2]} см</b>.\nБаланс: {user[3]} 💰\n⚠️ Рост только в группах!", 
-            reply_markup=main_private_kb()
-        )
+    await message.answer(
+        "👋 Привет! Я бот-выращиватель.\n\n"
+        "📜 <b>Команды:</b>\n"
+        "➕ /grow — Вырастить (раз в сутки)\n"
+        "🏆 /top — Топ игроков\n"
+        "💰 /balance — Твой профиль\n"
+        "🎁 /promo КОД — Активировать бонус"
+    )
 
-@dp.callback_query(F.data == "do_grow")
-async def process_grow(callback: CallbackQuery):
-    if callback.message.chat.type == 'private':
-        await callback.answer("❌ В личке не растет!", show_alert=True)
-        return
-    user = get_user(callback.from_user.id, callback.from_user.username)
+@dp.message(Command("grow"))
+async def grow_cmd(message: Message):
+    if message.chat.type == 'private':
+        return await message.answer("❌ Растить можно только в группах! Добавь меня в чат с друзьями.")
+    
+    user = get_user(message.from_user.id, message.from_user.username)
     now = datetime.datetime.now()
+    
     if user[4]:
         last = datetime.datetime.strptime(user[4], '%Y-%m-%d %H:%M:%S.%f')
         if (now - last).total_seconds() < 86400:
-            await callback.answer("⏳ Можно раз в 24 часа!", show_alert=True)
-            return
+            return await message.reply("⏳ Можно только раз в 24 часа! Приходи завтра.")
+
     diff = random.randint(-3, 10)
     new_size = max(0, user[2] + diff)
-    update_user(user_id=callback.from_user.id, dick_size=new_size, balance=user[3]+25, last_grow=str(now))
-    await callback.message.answer(f"📈 @{callback.from_user.username}, {'+' if diff>=0 else ''}{diff} см!\nТеперь: <b>{new_size} см</b>")
-    await callback.answer()
+    update_user(user_id=message.from_user.id, dick_size=new_size, balance=user[3]+25, last_grow=str(now))
+    
+    sign = "+" if diff >= 0 else ""
+    await message.reply(f"📈 {'+' if diff>=0 else ''}{diff} см!\nТеперь: <b>{new_size} см</b> (+25 💰)")
 
-@dp.callback_query(F.data == "view_top")
-async def process_top(callback: CallbackQuery):
+@dp.message(Command("balance"))
+async def balance_cmd(message: Message):
+    user = get_user(message.from_user.id, message.from_user.username)
+    await message.answer(
+        f"👤 <b>Профиль @{user[1]}</b>\n\n"
+        f"📏 Размер: {user[2]} см\n"
+        f"💰 Баланс: {user[3]} монет"
+    )
+
+@dp.message(Command("top"))
+async def top_cmd(message: Message):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('SELECT username, dick_size FROM users ORDER BY dick_size DESC LIMIT 10')
     rows = cursor.fetchall()
     conn.close()
+    
     res = "🏆 <b>ТОП-10 ИГРОКОВ:</b>\n\n"
     for i, r in enumerate(rows, 1):
         res += f"{i}. @{r[0]} — {r[1]} см\n"
-    await callback.message.answer(res)
-    await callback.answer()
-
-@dp.callback_query(F.data == "view_promo")
-async def process_promo_menu(callback: CallbackQuery):
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_query_data="back_main")]])
-    await callback.message.edit_text("Введи команду: <code>/promo КОД</code>", reply_markup=kb)
-
-@dp.callback_query(F.data == "view_shop")
-async def process_shop_menu(callback: CallbackQuery):
-    user = get_user(callback.from_user.id)
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💊 Витамины (+5 см) — 200 💰", callback_query_data="buy_5")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_query_data="back_main")]
-    ])
-    await callback.message.edit_text(f"🛒 <b>МАГАЗИН</b>\nБаланс: {user[3]} 💰", reply_markup=kb)
-
-@dp.callback_query(F.data == "buy_5")
-async def process_buy(callback: CallbackQuery):
-    user = get_user(callback.from_user.id)
-    if user[3] >= 200:
-        update_user(user_id=callback.from_user.id, dick_size=user[2]+5, balance=user[3]-200)
-        await callback.answer("✅ Куплено!", show_alert=True)
-        await process_shop_menu(callback)
-    else:
-        await callback.answer("❌ Мало монет!", show_alert=True)
-
-@dp.callback_query(F.data == "back_main")
-async def process_back(callback: CallbackQuery):
-    user = get_user(callback.from_user.id)
-    await callback.message.edit_text(
-        f"👋 Твой размер: <b>{user[2]} см</b>\nБаланс: {user[3]} 💰", 
-        reply_markup=main_private_kb()
-    )
+    await message.answer(res)
 
 @dp.message(Command("promo"))
 async def promo_cmd(message: Message, command: CommandObject):
-    if message.chat.type != 'private': return
     code = command.args
     if not code: return await message.answer("Пиши: <code>/promo КОД</code>")
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM promo_codes WHERE code = ?', (code,))
     promo = cursor.fetchone()
+    
     if promo:
         user = get_user(message.from_user.id)
         update_user(user_id=message.from_user.id, dick_size=user[2]+promo[1], balance=user[3]+promo[2])
@@ -161,6 +124,7 @@ async def promo_cmd(message: Message, command: CommandObject):
 # --- Запуск ---
 async def main():
     init_db()
+    print("Бот запущен без кнопок!")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
