@@ -1,39 +1,69 @@
 import os
 import asyncio
-import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
-# Настройка логов, чтобы видеть ошибки в консоли Bothost
-logging.basicConfig(level=logging.INFO)
-
-# Берем токен из Variables (обязательно назови её BOT_TOKEN на сайте)
+# Токен из переменных хостинга
 TOKEN = os.getenv("BOT_TOKEN")
+# Твой ID саппорта
+ADMIN_ID = 6176762600
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-def main_kb():
-    builder = InlineKeyboardBuilder()
-    
-    # 1 ряд: Те самые эмодзи в одну полоску
+# Клавиатура с кнопкой запроса телефона
+def phone_kb():
+    builder = ReplyKeyboardBuilder()
     builder.row(
-        types.InlineKeyboardButton(text="🏀", callback_data="game_basket"),
-        types.InlineKeyboardButton(text="⚽", callback_data="game_soccer"),
-        types.InlineKeyboardButton(text="🎯", callback_data="game_darts"),
-        types.InlineKeyboardButton(text=" bowling", callback_data="game_bowling"),
-        types.InlineKeyboardButton(text="🎲", callback_data="game_dice"),
-        types.InlineKeyboardButton(text="🎰", callback_data="game_slots")
+        types.KeyboardButton(text="📱 Отправить номер телефона", request_contact=True)
+    )
+    return builder.as_markup(resize_keyboard=True)
+
+@dp.message(CommandStart())
+async def start(message: types.Message):
+    await message.answer(
+        "👋 Привет! Чтобы мы могли вам помочь, пожалуйста, нажмите кнопку ниже и отправьте свой номер телефона.\n\n"
+        "После этого просто напишите ваше сообщение в чат.",
+        reply_markup=phone_kb()
+    )
+
+# Хендлер на получение контакта
+@dp.message(F.contact)
+async def get_contact(message: types.Message):
+    await message.answer(
+        "✅ Номер получен! Теперь просто напишите ваш вопрос или сообщение, и саппорт его получит.",
+        reply_markup=types.ReplyKeyboardRemove() # Убираем кнопку
+    )
+
+# Хендлер на любые текстовые сообщения (пересылка саппорту)
+@dp.message(F.text)
+async def forward_to_admin(message: types.Message):
+    user = message.from_user
+    # Пытаемся получить контакт из данных (если он уже был отправлен ранее)
+    phone = "Не указан"
+    
+    # Формируем текст для саппорта
+    report_text = (
+        f"🆘 **НОВОЕ ОБРАЩЕНИЕ**\n\n"
+        f"👤 **Юзернейм:** @{user.username if user.username else 'нет'}\n"
+        f"🆔 **Айди пользователя:** `{user.id}`\n"
+        f"📩 **Сообщение:** \n{message.text}"
     )
     
-    # 2 ряд: Кнопки под эмодзи
-    builder.row(
-        types.InlineKeyboardButton(text="🚀 Быстрые", callback_data="btn_fast"),
-        types.InlineKeyboardButton(text="Режимы 💣", callback_data="btn_modes")
-    )
-    
-    # 3 ряд: Web App или ссылка
+    try:
+        await bot.send_message(ADMIN_ID, report_text, parse_mode="Markdown")
+        await message.answer("✅ Ваше сообщение отправлено поддержке. Ожидайте ответа.")
+    except Exception as e:
+        await message.answer("❌ Ошибка при отправке. Попробуйте позже.")
+        print(f"Ошибка: {e}")
+
+async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
     builder.row(
         types.InlineKeyboardButton(text="🕹 Играть в WEB", url="https://t.me/telegram")
     )
