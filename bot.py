@@ -4,16 +4,15 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
-# Токен из переменных хостинга
+# Берем из Variables на хостинге
 TOKEN = os.getenv("BOT_TOKEN")
-# Твой ID саппорта
 ADMIN_ID = 6176762600
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Клавиатура с кнопкой запроса телефона
-def phone_kb():
+# Клавиатура с кнопкой телефона
+def get_phone_kb():
     builder = ReplyKeyboardBuilder()
     builder.row(
         types.KeyboardButton(text="📱 Отправить номер телефона", request_contact=True)
@@ -21,19 +20,58 @@ def phone_kb():
     return builder.as_markup(resize_keyboard=True)
 
 @dp.message(CommandStart())
-async def start(message: types.Message):
+async def start_cmd(message: types.Message):
     await message.answer(
-        "👋 Привет! Чтобы мы могли вам помочь, пожалуйста, нажмите кнопку ниже и отправьте свой номер телефона.\n\n"
-        "После этого просто напишите ваше сообщение в чат.",
-        reply_markup=phone_kb()
+        "🔴 **Внимание!**\n\nЧтобы связаться с поддержкой, необходимо подтвердить свой номер телефона.",
+        reply_markup=get_phone_kb(),
+        parse_mode="Markdown"
     )
 
-# Хендлер на получение контакта
+# Хендлер на получение номера
 @dp.message(F.contact)
-async def get_contact(message: types.Message):
+async def contact_handler(message: types.Message):
+    # Уведомляем админа о новом контакте
+    report = (
+        f"👤 **Новый контакт в базе**\n"
+        f"Юзер: @{message.from_user.username}\n"
+        f"ID: `{message.from_user.id}`\n"
+        f"Номер: `{message.contact.phone_number}`"
+    )
+    await bot.send_message(ADMIN_ID, report, parse_mode="Markdown")
+    
+    # Подтверждаем юзеру
     await message.answer(
-        "✅ Номер получен! Теперь просто напишите ваш вопрос или сообщение, и саппорт его получит.",
-        reply_markup=types.ReplyKeyboardRemove() # Убираем кнопку
+        "✅ Номер получен! Теперь напишите ваш вопрос, и саппорт ответит вам в ближайшее время.",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+
+# Хендлер на текстовые сообщения (только после отправки контакта)
+@dp.message(F.text)
+async def support_handler(message: types.Message):
+    if message.text == "/start":
+        return
+
+    # Данные для саппорта
+    report = (
+        f"🆘 **НОВОЕ ОБРАЩЕНИЕ**\n\n"
+        f"👤 **Юзернейм:** @{message.from_user.username if message.from_user.username else 'Скрыт'}\n"
+        f"🆔 **Айди:** `{message.from_user.id}`\n"
+        f"💬 **Сообщение:** \n{message.text}"
+    )
+
+    try:
+        await bot.send_message(ADMIN_ID, report, parse_mode="Markdown")
+        await message.answer("🚀 Ваше сообщение доставлено саппорту.")
+    except Exception as e:
+        await message.answer("❌ Ошибка отправки. Попробуйте позже.")
+        print(f"Ошибка: {e}")
+
+async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
     )
 
 # Хендлер на любые текстовые сообщения (пересылка саппорту)
