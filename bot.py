@@ -1,39 +1,82 @@
 import os
 import asyncio
+import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
-# Берем токен из настроек хостинга
+# Настройка логирования для консоли Bothost
+logging.basicConfig(level=logging.INFO)
+
+# Берем токен из Variables на сайте Bothost
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 6176762600
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Кнопка запроса телефона
+# Функция для кнопки телефона
 def get_phone_kb():
     builder = ReplyKeyboardBuilder()
     builder.row(types.KeyboardButton(text="📱 Отправить номер телефона", request_contact=True))
     return builder.as_markup(resize_keyboard=True)
 
+# Команда /start
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     await message.answer(
-        "👋 **Служба поддержки**\n\nЧтобы отправить запрос, пожалуйста, подтвердите свой номер телефона кнопкой ниже.",
+        "👋 **Служба поддержки**\n\nЧтобы отправить запрос, подтвердите свой номер телефона кнопкой ниже.",
         reply_markup=get_phone_kb(),
         parse_mode="Markdown"
     )
 
-# Когда юзер отправил контакт
+# Прием контакта
 @dp.message(F.contact)
 async def handle_contact(message: types.Message):
-    # Шлем админу данные юзера
+    user = message.from_user
+    username = f"@{user.username}" if user.username else "Скрыт"
+    
+    # Сообщение админу
     text_to_admin = (
-        f"📱 **ПОЛУЧЕН КОНТАКТ**\n"
-        f"Юзернейм: @{message.from_user.username or 'нет'}\n"
-        f"ID: `{message.from_user.id}`\n"
-        f"Номер: `{message.contact.phone_number}`"
+        f"📱 **ПОЛУЧЕН НОМЕР**\n"
+        f"Юзернейм: {username}\n"
+        f"Айди пользователя: {user.id}\n"
+        f"Номер телефона: {message.contact.phone_number}"
+    )
+    
+    await bot.send_message(ADMIN_ID, text_to_admin)
+    await message.answer(
+        "✅ Номер получен! Теперь напишите ваш вопрос текстом ниже.",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+
+# Прием текстового сообщения
+@dp.message(F.text)
+async def handle_support_msg(message: types.Message):
+    if message.text == "/start":
+        return
+
+    user = message.from_user
+    username = f"@{user.username}" if user.username else "Скрыт"
+
+    # Формируем сообщение для саппорта
+    report = (
+        f"🆘 **НОВОЕ ОБРАЩЕНИЕ**\n"
+        f"Юзернейм: {username}\n"
+        f"Айди пользователя: {user.id}\n"
+        f"Сообщение: \n{message.text}"
+    )
+
+    await bot.send_message(ADMIN_ID, report)
+    await message.answer("🚀 Ваше сообщение отправлено поддержке.")
+
+async def main():
+    # Удаляем старые сообщения, которые накопились пока бот был офлайн
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
     )
     await bot.send_message(ADMIN_ID, text_to_admin, parse_mode="Markdown")
     
