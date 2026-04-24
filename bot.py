@@ -8,7 +8,7 @@ from supabase import create_client, Client
 # --- ТВОИ КОНФИГ ПАРАМЕТРЫ ---
 SB_URL = 'https://wbkygibviddkdjxbahbg.supabase.co'
 SB_KEY = 'sb_publishable_l5wIAt6RrAl4Uo8uZKerRQ_xBYDS-Kv'
-BOT_TOKEN = '8241678987:AAHON1kT5rrqw6fxbsXLpnjdoLR0W6XTjxg'
+BOT_TOKEN = '8630026221:AAGfuIfKQPdxSkyhU3IVCnRtRkKrlzKD0nk'
 
 supabase: Client = create_client(SB_URL, SB_KEY)
 bot = Bot(token=BOT_TOKEN)
