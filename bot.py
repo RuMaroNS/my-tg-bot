@@ -16,7 +16,7 @@ dp = Dispatcher()
 
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 def get_user(tg_id):
-    res = supabase.table("users").select("*").eq("TelegramUSER", str(tg_id)).execute()
+    res = supabase.table("profile").select("*").eq("TelegramUSER", str(tg_id)).execute()
     return res.data[0] if res.data else None
 
 def get_loot(case_id):
