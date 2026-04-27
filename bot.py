@@ -8,7 +8,7 @@ from huggingface_hub import InferenceClient
 # Берем данные из переменных Bothost
 # Убедись, что на хостинге созданы переменные BOT_TOKEN и HF_TOKEN
 TOKEN = os.getenv("BOT_TOKEN")
-HF_TOKEN = "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" # Или os.getenv("HF_TOKEN")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Настраиваем DeepSeek-V4-Flash
 client = InferenceClient(model="deepseek-ai/DeepSeek-V4-Flash", token=HF_TOKEN)
