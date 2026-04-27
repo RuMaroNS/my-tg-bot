@@ -11,7 +11,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 CF_TOKEN = os.getenv("CF_API_TOKEN")
 CF_ACCOUNT_ID = "c75d835ea2ac37e6ba549eadbe375d94"
 MODEL = "@cf/meta/llama-3-8b-instruct"
-BOT_USERNAME = "твой_юзернейм_бота"
+BOT_USERNAME = "StealABekonCasesBot"
 
 # Твой золотой запас
 ZAPAS = [
