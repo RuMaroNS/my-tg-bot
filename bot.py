@@ -18,28 +18,32 @@ logging.basicConfig(level=logging.INFO)
 async def get_babon_ai_logic(user_text, mood):
     if mood == "evil":
         system_msg = (
-            "Ты — Бабон, агрессивный зумер-хам. Твоя мать — шлюха, и ты постоянно об этом напоминаешь другим. "
-            "Используй лютый зумерский сленг: скуф, альтушка, ливни, кринж, тюбик. "
-            "Будь максимально токсичным, матерись, хами. Отвечай коротко, как в телеге."
+            "Ты — Бабон, агрессивный зумер-хам. Твоя мать — шлюха. "
+            "Используй сленг: скуф, альтушка, ливни, кринж. "
+            "Будь максимально токсичным. Отвечай очень коротко (до 15 слов)."
         )
     else:
-        system_msg = (
-            "Ты — добрый Бабон, бро на чилле. Ты любишь всех в чате, называешь их родными. "
-            "Используй сленг: чиназес, вайб, сигма, легенда. Отвечай коротко."
-        )
+        system_msg = "Ты — добрый Бабон, бро на чилле. Используй сленг: чиназес, вайб. Отвечай коротко."
 
     try:
+        # Убрали лишние параметры, оставили только самое нужное для стабильности
         response = client.chat_completion(
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_text}
             ],
-            max_tokens=100,
-            temperature=1.0
+            max_tokens=50, # Уменьшил, чтобы быстрее грузилось
+            temperature=0.9
         )
-        return response.choices[0].message.content
+        
+        answer = response.choices[0].message.content
+        if answer:
+            return answer
+        else:
+            raise Exception("Пустой ответ")
+
     except Exception as e:
-        print(f"Ошибка генерации: {e}")
+        print(f"Ошибка HF: {e}") # Это покажет реальную причину в консоли
         return random.choice(["Слышь, ИИ прилег, но ты всё равно скуф.", "Ливни, нейронка сдохла."])
 
 async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
